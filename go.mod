@@ -1,4 +1,4 @@
-module audio/test
+module github.com/kyrbrbik/speech-to-text
 
 go 1.21.4
 
