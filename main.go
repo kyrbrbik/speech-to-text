@@ -9,10 +9,11 @@ import (
 	"log"
 	"mime/multipart"
 	"net/http"
-	"time"
 	"os"
 	"os/user"
 	"path/filepath"
+	"strconv"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -21,20 +22,23 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/MarkKremer/microphone"
 	"github.com/atotto/clipboard"
+	"github.com/gopxl/beep"
 	"github.com/gopxl/beep/wav"
 )
 
 type AppState struct {
 	UserInput string `json:"userInput"`
 	UserLang  string `json:"userLang"`
+	UserRate  string `json:"userRate"`
 }
 
 var (
 	userLang  string
 	userInput string
+	userRate  string
 	entry     *widget.Entry
-	a = app.New()
-	w = a.NewWindow("Whisper")
+	a         = app.New()
+	w         = a.NewWindow("Whisper")
 	recording bool
 	stopChan  chan struct{}
 	timer     *time.Timer
@@ -42,7 +46,7 @@ var (
 	data      struct {
 		Text string `json:"text"`
 	}
-	state = AppState{}
+	state     = AppState{}
 	configDir string
 )
 
@@ -69,8 +73,10 @@ func main() {
 	text := widget.NewLabelWithData(str)
 
 	timer := widget.NewLabel("00:00:00")
-	
-	header := widget.NewLabel("OpenAI key:")
+
+	headerKey := widget.NewLabel("OpenAI key:")
+	headerLang := widget.NewLabel("Language:")
+	headerRate := widget.NewLabel("Sample rate:")
 
 	apikey := binding.BindString(&state.UserInput)
 	entry := widget.NewEntryWithData(apikey)
@@ -79,7 +85,7 @@ func main() {
 		state.UserInput = text
 		userInput = text
 	}
-	
+
 	languageOptions := []string{"cs", "en"}
 	languageBinding := binding.BindString(&state.UserLang)
 
@@ -89,7 +95,18 @@ func main() {
 		log.Println("Selected language: " + selected)
 	})
 
-	language.SetSelected(state.UserLang)	
+	language.SetSelected(state.UserLang)
+
+	sampleRateOptions := []string{"44100", "48000"}
+	sampleRateBinding := binding.BindString(&state.UserRate)
+
+	sampleRate := widget.NewSelect(sampleRateOptions, func(selected string) {
+		sampleRateBinding.Set(selected)
+		state.UserRate = selected
+		log.Println("Selected sample rate: " + selected)
+	})
+
+	sampleRate.SetSelected(state.UserRate)
 
 	button1 := widget.NewButton("Start recording", func() {
 		startTimer(timer)
@@ -109,7 +126,7 @@ func main() {
 	})
 
 	appContent := container.NewVBox(button1, button2, timer, text)
-	settingsContent := container.NewVBox( language, header, entry)
+	settingsContent := container.NewVBox(headerKey, entry, headerLang, language, headerRate, sampleRate)
 
 	tabs := container.NewAppTabs(
 		container.NewTabItem("App", appContent),
@@ -180,12 +197,12 @@ func apiCall() string {
 	if err != nil {
 		log.Fatal(err)
 	}
-	
+
 	openaiKey := userInput
 	log.Println("openaiKey: " + openaiKey)
 
 	request.Header.Set("Content-Type", writer.FormDataContentType())
-	request.Header.Set("Authorization", "Bearer "+ openaiKey)
+	request.Header.Set("Authorization", "Bearer "+openaiKey)
 
 	client := http.Client{}
 	response, err := client.Do(request)
@@ -212,7 +229,11 @@ func recordAudio(stopChan <-chan struct{}) {
 	}
 	defer microphone.Terminate()
 
-	stream, format, err := microphone.OpenDefaultStream(44100, 1)
+	userRate, err := strconv.Atoi(state.UserRate)
+	if err != nil {
+		log.Fatal(err)
+	}
+	stream, format, err := microphone.OpenDefaultStream(beep.SampleRate(userRate), 1)
 	if err != nil {
 		log.Fatal(err)
 	}
