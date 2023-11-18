@@ -21,7 +21,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/MarkKremer/microphone"
 	"github.com/atotto/clipboard"
-	"github.com/faiface/beep/wav"
+	"github.com/gopxl/beep/wav"
 )
 
 type AppState struct {

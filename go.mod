@@ -4,9 +4,9 @@ go 1.21.4
 
 require (
 	fyne.io/fyne/v2 v2.4.1
-	github.com/MarkKremer/microphone v1.1.0
+	github.com/MarkKremer/microphone v1.2.0
 	github.com/atotto/clipboard v0.1.4
-	github.com/faiface/beep v1.0.2
+	github.com/gopxl/beep v1.1.0
 )
 
 require (
