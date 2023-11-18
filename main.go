@@ -26,9 +26,11 @@ import (
 
 type AppState struct {
 	UserInput string `json:"userInput"`
+	UserLang  string `json:"userLang"`
 }
 
 var (
+	userLang  string
 	userInput string
 	entry     *widget.Entry
 	a = app.New()
@@ -57,8 +59,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	loadState()
-
+	state := loadState()
 
 	w.Resize(fyne.NewSize(400, 300))
 
@@ -77,8 +78,18 @@ func main() {
 	entry.OnChanged = func(text string) {
 		state.UserInput = text
 		userInput = text
-		log.Println("userInput: " + userInput)
 	}
+	
+	languageOptions := []string{"cs", "en"}
+	languageBinding := binding.BindString(&state.UserLang)
+
+	language := widget.NewSelect(languageOptions, func(selected string) {
+		languageBinding.Set(selected)
+		state.UserLang = selected
+		log.Println("Selected language: " + selected)
+	})
+
+	language.SetSelected(state.UserLang)	
 
 	button1 := widget.NewButton("Start recording", func() {
 		startTimer(timer)
@@ -97,9 +108,15 @@ func main() {
 		clipboardWrite(data.Text)
 	})
 
-	content := container.NewVBox(button1, button2, timer, text, header, entry)
-	
-	w.SetContent(content)
+	appContent := container.NewVBox(button1, button2, timer, text)
+	settingsContent := container.NewVBox( language, header, entry)
+
+	tabs := container.NewAppTabs(
+		container.NewTabItem("App", appContent),
+		container.NewTabItem("Settings", settingsContent),
+	)
+
+	w.SetContent(tabs)
 	w.ShowAndRun()
 
 	saveState()
@@ -152,7 +169,7 @@ func apiCall() string {
 	}
 
 	_ = writer.WriteField("model", "whisper-1")
-	_ = writer.WriteField("language", "cs")
+	_ = writer.WriteField("language", state.UserLang)
 
 	err = writer.Close()
 	if err != nil {
@@ -252,11 +269,11 @@ func stopRecording() {
 	}
 }
 
-func loadState() {
+func loadState() *AppState {
 	filePath := filepath.Join(configDir, "state.json")
 	file, err := os.Open(filePath)
 	if err != nil {
-		return // If the file doesn't exist or there's an error, just return
+		return &AppState{}
 	}
 	defer file.Close()
 
@@ -265,6 +282,7 @@ func loadState() {
 	if err != nil {
 		fmt.Println("Error decoding state:", err)
 	}
+	return &state
 }
 
 func saveState() {
