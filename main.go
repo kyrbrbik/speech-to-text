@@ -48,10 +48,10 @@ var (
 	}
 	state     = AppState{}
 	configDir string
+	filename  string
 )
 
 func main() {
-
 	usr, err := user.Current()
 	if err != nil {
 		log.Fatal(err)
@@ -109,14 +109,20 @@ func main() {
 	sampleRate.SetSelected(state.UserRate)
 
 	button1 := widget.NewButton("Start recording", func() {
+		filename = generateFilename()
+		log.Println("Recording started", filename)
 		startTimer(timer)
-		toggleRecording()
+		startRecording(filename)
 	})
 
 	button2 := widget.NewButton("Stop recording", func() {
+		if !recording {
+			return
+		}
 		stopTimer()
 		stopRecording()
-		response := apiCall()
+	    log.Println("Recording stopped", filename)
+		response := apiCall(filename)
 		err := json.Unmarshal([]byte(response), &data)
 		if err != nil {
 			log.Println(err)
@@ -135,7 +141,7 @@ func main() {
 
 	w.SetContent(tabs)
 	w.ShowAndRun()
-
+	
 	saveState()
 }
 
@@ -164,8 +170,9 @@ func clipboardWrite(output string) {
 	}
 }
 
-func apiCall() string {
-	audioFilePath := "/tmp/output.wav"
+func apiCall(filename string) string {
+	audioFilePath := filename
+	log.Println("audioFilePath: " + audioFilePath)
 	url := "https://api.openai.com/v1/audio/transcriptions"
 	file, err := os.Open(audioFilePath)
 	if err != nil {
@@ -203,7 +210,7 @@ func apiCall() string {
 
 	request.Header.Set("Content-Type", writer.FormDataContentType())
 	request.Header.Set("Authorization", "Bearer "+openaiKey)
-
+	
 	client := http.Client{}
 	response, err := client.Do(request)
 	if err != nil {
@@ -218,12 +225,12 @@ func apiCall() string {
 	if err != nil {
 		log.Fatal(err)
 	}
-	os.Remove(audioFilePath)
+
 	return string(responseBody)
 }
 
 func recordAudio(stopChan <-chan struct{}, filename string) {
-	log.Println("Recording audio...")
+	log.Println("Recording audio into " + filename)
 	err := microphone.Init()
 	if err != nil {
 		log.Fatal(err)
@@ -246,48 +253,41 @@ func recordAudio(stopChan <-chan struct{}, filename string) {
 		log.Fatal(err)
 	}
 
+	defer f.Close()
+
+	go func() {
+		<-stopChan
+		log.Println("Stopping recording")
+		stream.Stop()
+	}()
+
 	stream.Start()
 
-	for {
-		select {
-		case <-stopChan:
-			log.Println("Stop recording")
-			stream.Stop()
-			return
-		default:
-			// continue recording
-		}
-
-		err = wav.Encode(f, stream, format)
-		if err != nil {
-			log.Fatal(err)
-		}
+	err = wav.Encode(f, stream, format)
+	if err != nil {
+		log.Fatal(err)
 	}
+
+	os.Remove(filename)
 }
 
-func toggleRecording() {
-	if recording {
-		stopRecording()
-	} else {
-		startRecording()
-	}
-	recording = !recording
-}
-
-func startRecording() {
+func startRecording(filename string) {
 	log.Println("start recording")
-	filename := fmt.Sprintf("/tmp/output_%d.wav", time.Now().Unix())
-	go recordAudio(stopChan, filename)
+	log.Println(filename)
+	recording = true
 	stopChan = make(chan struct{})
+	go recordAudio(stopChan, filename)
 }
 
 func stopRecording() {
-	log.Println("stop recording")
-	if recording {
-		log.Println("not recording")
-	} else {
+	if recording{
+		log.Println("stop recording")
 		close(stopChan)
+		recording = false
+	} else {
+		log.Println("not recording")
 	}
+
 }
 
 func loadState() *AppState {
@@ -320,4 +320,9 @@ func saveState() {
 	if err != nil {
 		fmt.Println("Error encoding state:", err)
 	}
+}
+
+func generateFilename() string {
+	filename := fmt.Sprintf("/tmp/output_%d.wav", time.Now().Unix())
+	return filename
 }
