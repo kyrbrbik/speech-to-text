@@ -218,10 +218,11 @@ func apiCall() string {
 	if err != nil {
 		log.Fatal(err)
 	}
+	os.Remove(audioFilePath)
 	return string(responseBody)
 }
 
-func recordAudio(stopChan <-chan struct{}) {
+func recordAudio(stopChan <-chan struct{}, filename string) {
 	log.Println("Recording audio...")
 	err := microphone.Init()
 	if err != nil {
@@ -239,8 +240,6 @@ func recordAudio(stopChan <-chan struct{}) {
 	}
 
 	defer stream.Close()
-
-	filename := "/tmp/output.wav"
 
 	f, err := os.Create(filename)
 	if err != nil {
@@ -277,7 +276,8 @@ func toggleRecording() {
 
 func startRecording() {
 	log.Println("start recording")
-	go recordAudio(stopChan)
+	filename := fmt.Sprintf("/tmp/output_%d.wav", time.Now().Unix())
+	go recordAudio(stopChan, filename)
 	stopChan = make(chan struct{})
 }
 
