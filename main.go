@@ -71,6 +71,7 @@ func main() {
 	str.Set(" ")
 
 	text := widget.NewLabelWithData(str)
+	text.Wrapping = fyne.TextWrapWord
 
 	timer := widget.NewLabel("00:00:00")
 
@@ -123,12 +124,10 @@ func main() {
 		stopRecording()
 	    log.Println("Recording stopped", filename)
 		response := apiCall(filename)
-		err := json.Unmarshal([]byte(response), &data)
-		if err != nil {
-			log.Println(err)
-		}
-		str.Set(data.Text)
-		clipboardWrite(data.Text)
+		correctedText := correctText(response)
+
+		str.Set(correctedText)
+		clipboardWrite(correctedText)
 	})
 
 	appContent := container.NewVBox(button1, button2, timer, text)
@@ -226,8 +225,90 @@ func apiCall(filename string) string {
 		log.Fatal(err)
 	}
 
-	return string(responseBody)
+	err1 := json.Unmarshal([]byte(responseBody), &data)
+	if err1 != nil {
+		log.Println(err)
+	}
+	unformattedText := data.Text
+	log.Println("unformattedText: " + unformattedText)
+	return string(unformattedText)
 }
+
+func correctText(text string) string {
+	var role string
+
+	if state.UserLang == "en" {
+		role = "You are an editor that corrects errors in speech to text transcription."
+	} else {
+		role = "Jste editor, který opravuje chyby v přepisu řeči na text."
+	}
+	token := userInput
+	url := "https://api.openai.com/v1/chat/completions"
+	model := "gpt-3.5-turbo"
+	body := []byte(fmt.Sprintf(`{
+		"model": "%s",
+		"messages": [
+		  {
+			"role": "system" ,
+			"content": "%s"
+		  },
+		  {
+			"role": "user",
+			"content": "%s"
+		  }
+		]
+	  }`, model, role, text))
+
+	log.Println("body: " + string(body))
+	request, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+token)
+
+	client := http.Client{}
+	response, err := client.Do(request)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer response.Body.Close()
+
+	fmt.Println("Status: ", response.Status)
+
+	responseBody, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message""`
+		} `json:"choices"`
+	}
+	
+	err1 := json.Unmarshal([]byte(responseBody), &result)
+	if err1 != nil {
+		log.Println(err)
+	}
+
+	var message string
+
+	if len(result.Choices) > 0 {
+		message := result.Choices[0].Message.Content
+		log.Println("message: " + message)
+		return string(message)
+	} else {
+		log.Println("No message")
+	}
+	
+	return message
+}
+
 
 func recordAudio(stopChan <-chan struct{}, filename string) {
 	log.Println("Recording audio into " + filename)
