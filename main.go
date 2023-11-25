@@ -122,7 +122,7 @@ func main() {
 		}
 		stopTimer()
 		stopRecording()
-	    log.Println("Recording stopped", filename)
+		log.Println("Recording stopped", filename)
 		response := apiCall(filename)
 		correctedText := correctText(response)
 
@@ -140,7 +140,7 @@ func main() {
 
 	w.SetContent(tabs)
 	w.ShowAndRun()
-	
+
 	saveState()
 }
 
@@ -209,7 +209,7 @@ func apiCall(filename string) string {
 
 	request.Header.Set("Content-Type", writer.FormDataContentType())
 	request.Header.Set("Authorization", "Bearer "+openaiKey)
-	
+
 	client := http.Client{}
 	response, err := client.Do(request)
 	if err != nil {
@@ -282,7 +282,7 @@ func correctText(text string) string {
 	if err != nil {
 		log.Fatal(err)
 	}
-	
+
 	var result struct {
 		Choices []struct {
 			Message struct {
@@ -290,7 +290,7 @@ func correctText(text string) string {
 			} `json:"message""`
 		} `json:"choices"`
 	}
-	
+
 	err1 := json.Unmarshal([]byte(responseBody), &result)
 	if err1 != nil {
 		log.Println(err)
@@ -305,10 +305,9 @@ func correctText(text string) string {
 	} else {
 		log.Println("No message")
 	}
-	
+
 	return message
 }
-
 
 func recordAudio(stopChan <-chan struct{}, filename string) {
 	log.Println("Recording audio into " + filename)
@@ -361,7 +360,7 @@ func startRecording(filename string) {
 }
 
 func stopRecording() {
-	if recording{
+	if recording {
 		log.Println("stop recording")
 		close(stopChan)
 		recording = false
